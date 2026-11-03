@@ -5,11 +5,15 @@ Se una voce è rossa, si sistema venerdì, non sabato.
 
 ## Sistema
 
-- ☐ Node installato sul sistema: `node -v` → risponde (oggi **non** risponde: va installato)
-- ☐ `npm -v` risponde
-- ☐ `git --version` risponde
-- ☐ identità git configurata: `git config --global user.name` e `user.email` (oggi **vuoti**)
-- ☐ `gh auth status` → logged in
+- ☑ Node sul sistema: **già a posto** — `C:\Users\lurag\AppData\Local\hermes\node` è nel PATH utente,
+  quindi `node -v` risponde da cmd/PowerShell. NON da git-bash (lo shim senza estensione stampa
+  "stdin is not a tty"): è un problema della shell, non dell'installazione. `winget install
+  OpenJS.NodeJS.LTS` è facoltativo, serve solo per avere un Node indipendente da Hermes.
+- ☑ `npm -v` risponde (12.0.2)
+- ☑ `git --version` risponde
+- ☑ identità git: impostata **locale al repo** (`Filippo Luraghi` / `luraghi.filippo@protonmail.com`).
+  Manca quella globale: se crei un altro repo, rifalla.
+- ☑ `gh auth status` → logged in (CapraPazza)
 
 ## Progetto
 
@@ -22,7 +26,9 @@ Se una voce è rossa, si sistema venerdì, non sabato.
 
 ## Agenti
 
-- ☐ `opencode` risolve: `which -a opencode` (oggi **non** risolve nel mio PATH)
+- ☐ `opencode` risolve nel terminale che userai: **oggi no**. Il wrapper è in
+  `C:\Users\lurag\.local\bin\opencode.cmd`, ma quella cartella non è nel PATH.
+  Fix: `setx PATH "%PATH%;C:\Users\lurag\.local\bin"` e riapri il terminale.
 - ☐ `opencode run "rispondi solo: OK"` → risponde (prova provider + modello)
 - ☐ `AGENTS.md` è nella radice del repo e dice il vero
 - ☐ Fritz ha fatto almeno una modifica da solo con OpenCode, e ha visto il suo commit
