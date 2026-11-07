@@ -1,6 +1,9 @@
+import "./globals.css";
+
 export const metadata = {
-  title: "Studia con me",
-  description: "Il tutor AI che legge il tuo materiale e ti interroga.",
+  title: "T2T — Teaching to Teach",
+  description:
+    "L'agente che insegna a insegnare: non scrive la lezione finché non hai scommesso dove i tuoi studenti si bloccano.",
 };
 
 export default function RootLayout({ children }) {

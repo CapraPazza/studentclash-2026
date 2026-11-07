@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prompts } from "../../config";
+import { prompts, mocks } from "../../config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,36 +9,28 @@ const BASE = process.env.LLM_BASE_URL || "https://ollama.com/v1";
 const MODEL = process.env.LLM_MODEL || "deepseek-v4.1-flash";
 const KEY = process.env.LLM_API_KEY || "";
 
-const MOCK_QUIZ = `## Domanda 1 (facile)
-Che cosa distingue un bene rivale da un bene non rivale? Fai un esempio.
+const MIN_MATERIAL = 60;
+const MIN_PREDICTION = 3;
+const MIN_LOG = 20;
 
-**Risposta:** Un bene è rivale se il suo consumo da parte di uno esclude quello di un altro. Un panino è rivale: se lo mangio io, non lo mangi tu. Una trasmissione radio non è rivale.
-
-## Domanda 2
-Perché il costo marginale nullo di un bene non rivale crea un problema di prezzo?
-
-**Risposta:** Con costo marginale nullo, il prezzo efficiente è zero, ma a prezzo zero l'impresa non copre i costi fissi. Da qui il finanziamento pubblico o il bundling.
-
-## Domanda 3 (difficile)
-Se un bene è non rivale ma escludibile, quale fallimento di mercato resta e quale scompare?
-
-**Risposta:** Scompare il problema della congestione, resta quello del monopolio naturale: l'esclusione tecnica permette di prezzare sopra il costo marginale.
-
-**Concetti fragili:** distinzione rivale/escludibile; rapporto tra costo marginale e prezzo efficiente.`;
-
-const MOCK_FEEDBACK = `### Chiarezza — 3/5
-- Funziona: la tesi è nella prima riga, si capisce dove vuoi arrivare.
-- Da rifare: due frasi usano "questo" senza dire a cosa si riferiscono.
-
-### Uso del materiale — 2/5
-- Funziona: citi correttamente la definizione di bene non rivale.
-- Da rifare: il resto dell'argomento non si appoggia a nessun passaggio del testo.
-
-### Struttura — 4/5
-- Funziona: introduzione, tre argomenti, conclusione. Si segue.
-- Da rifare: l'ultimo paragrafo apre un tema nuovo che non chiudi.
-
-**La modifica più utile:** collega ogni paragrafo a una frase precisa del materiale, con la citazione tra parentesi.`;
+/** Il modello a volte incapsula il JSON nei fence o ci mette una frase davanti. */
+function safeJson(text) {
+  const clean = String(text)
+    .replace(/^\s*```(?:json)?/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  try {
+    return JSON.parse(clean);
+  } catch {}
+  const start = clean.indexOf("{");
+  const end = clean.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(clean.slice(start, end + 1));
+    } catch {}
+  }
+  return null;
+}
 
 export async function GET() {
   return NextResponse.json({ mock: MOCK, model: MODEL, hasKey: Boolean(KEY) });
@@ -52,18 +44,59 @@ export async function POST(request) {
     return NextResponse.json({ error: "Richiesta non valida." }, { status: 400 });
   }
 
-  const material = String(body?.material || "").trim();
-  const action = body?.action === "feedback" ? "feedback" : "quiz";
+  const action = body?.action === "debrief" ? "debrief" : "plan";
+  const material = String(body?.material || "").trim().slice(0, 12000);
+  const students = Array.isArray(body?.students) ? body.students.slice(0, 6) : [];
 
-  if (material.length < 40) {
+  if (material.length < MIN_MATERIAL) {
     return NextResponse.json(
-      { error: "Serve un po' più di materiale: almeno un paragrafo." },
+      { error: "Serve il materiale vero del corso: almeno il programma in un paragrafo." },
+      { status: 400 },
+    );
+  }
+  if (!students.length) {
+    return NextResponse.json({ error: "Serve almeno uno studente con il suo profilo." }, { status: 400 });
+  }
+
+  // ── Il confine, in codice: senza scommessa la lezione non si genera. ──
+  if (action === "plan") {
+    const missing = students.filter((s) => String(s?.prediction || "").trim().length < MIN_PREDICTION);
+    if (missing.length) {
+      return NextResponse.json(
+        {
+          blocked: true,
+          error:
+            missing.length === 1
+              ? `Manca la previsione per ${missing[0].name}: dove si bloccherà? La lezione non esce prima.`
+              : `Mancano ${missing.length} previsioni (${missing.map((s) => s.name).join(", ")}). La lezione non esce prima.`,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  const lessonLog = String(body?.lessonLog || "").trim().slice(0, 6000);
+  if (action === "debrief" && lessonLog.length < MIN_LOG) {
+    return NextResponse.json(
+      { error: "Racconta cosa è andato storto: almeno una frase su cosa non è passato." },
       { status: 400 },
     );
   }
 
+  const people = students.map((s) => ({
+    nome: s.name,
+    livello: s.level || "",
+    profilo: s.note || "",
+    previsione_istruttore: String(s.prediction || "").trim(),
+  }));
+
+  const payload =
+    action === "plan"
+      ? { programma: material, studenti: people }
+      : { programma: material, studenti: people, lezione: body?.plan || null, racconto_istruttore: lessonLog };
+
   if (MOCK) {
-    return NextResponse.json({ text: action === "feedback" ? MOCK_FEEDBACK : MOCK_QUIZ, mock: true });
+    return NextResponse.json({ data: mocks[action], mock: true });
   }
 
   if (!KEY) {
@@ -81,11 +114,11 @@ export async function POST(request) {
         model: MODEL,
         messages: [
           { role: "system", content: prompts[action] },
-          { role: "user", content: material.slice(0, 12000) },
+          { role: "user", content: JSON.stringify(payload) },
         ],
-        temperature: 0.4,
+        temperature: 0.3,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(90000),
     });
 
     if (!res.ok) {
@@ -97,13 +130,31 @@ export async function POST(request) {
     }
 
     const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content?.trim();
+    const text = data?.choices?.[0]?.message?.content?.trim() || "";
     if (!text) return NextResponse.json({ error: "Risposta vuota dal modello." }, { status: 502 });
 
-    return NextResponse.json({ text, mock: false });
+    const parsed = safeJson(text);
+    if (!parsed) {
+      return NextResponse.json(
+        { error: "Il modello non ha risposto in JSON. Riprova.", raw: text.slice(0, 800) },
+        { status: 502 },
+      );
+    }
+
+    // Il conteggio non si delega al modello: se dice "2 su 3" ma i verdetti sono 0, la demo mente.
+    if (action === "debrief" && Array.isArray(parsed.verdicts)) {
+      const total = parsed.verdicts.length;
+      const hits = parsed.verdicts.filter((v) => v && v.hit === true).length;
+      parsed.hit_rate = `${hits} su ${total}`;
+    }
+
+    return NextResponse.json({ data: parsed, mock: false });
   } catch (err) {
     return NextResponse.json(
-      { error: "Modello non raggiungibile (rete o timeout). Se sei in demo, usa il video.", detail: String(err).slice(0, 200) },
+      {
+        error: "Modello non raggiungibile (rete o timeout). Se sei in demo, parte il video.",
+        detail: String(err).slice(0, 200),
+      },
       { status: 504 },
     );
   }
