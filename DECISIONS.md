@@ -15,8 +15,13 @@ Una riga per decisione: cosa, perché, chi. Si aggiorna mentre si costruisce, no
 | 2026-11-07 | Rendering markdown minimale lato client (titoli, elenchi, grassetto) invece di stampare il testo grezzo | Il modello risponde in markdown: senza renderer la demo mostrava `**Risposta:**` e `## Domanda 1` davanti alla giuria | Filippo |
 | 2026-11-07 | Il pubblico si aggiorna **solo** con codice committato: nessuna demo dal portatile | Alle 13:45 l'URL ufficiale serviva ancora la vecchia app ("Studia con me", "Genera domande") mentre il T2T era solo locale: la giuria avrebbe visto il progetto sbagliato | Filippo (con Fritz) |
 | 2026-11-07 | Una sola parte nuova prima del congelamento: la memoria dei profili in `localStorage`. Quiz corretti, calibrazione e compiti restano fuori | 75 minuti al freeze: il brief chiede «one core flow well rather than many features poorly». Le parti tagliate si dichiarano nel pitch, non si costruiscono a metà | team |
+| 2026-11-07 | Il **criterio** di "previsione azzeccata" sta nel prompt: stesso punto di rottura, non stesse parole | Senza criterio il modello contava 0 su 3 anche quando il punto era centrato; con il criterio conta 2 su 3 sullo stesso racconto | Filippo |
+| 2026-11-07 | `hit_rate` ricalcolato in codice sui verdetti (`route.js`) | Il modello restituiva "2 su 3" con un solo verdetto vero: una metrica non sindacabile è una metrica che mente alla giuria | Filippo |
+| 2026-11-07 | Deploy verificato con un POST **fuori dominio** (corso di scacchi) sul pubblico | Il solo `GET` non distingue mock da modello vero: la prova che segue l'input è il piano sugli scacchi in 21,8 s | Filippo |
+| 2026-11-07 | Il modello risponde in **JSON**, non markdown | Serve rendere blocchi, segnalazioni e verdetti separatamente, e lasciare che l'istruttore tolga un blocco dal piano | team |
 
 ## Aperte
 
-- Modello di sabato: `deepseek-v4.1-flash` (1M contesto) oppure un modello più veloce se la risposta tarda.
-- Nome del prodotto: provvisorio.
+- Modello: `deepseek-v4.1-flash` — piano 18-22 s, debriefing 13-16 s. Va detto al pitch che c'è un'attesa: niente finta attesa, la UI mostra "sto costruendo la lezione".
+- Nome: **T2T** (Teaching to Teach). Corto, si ripete.
+- Non fatto, da dichiarare: nessun salvataggio tra sessioni; nessuna seconda lezione generata sui profili aggiornati; confronto tra sicurezza dichiarata dallo studente ed esito del quiz.

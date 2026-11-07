@@ -1,53 +1,81 @@
-# Studia con me — scheletro hackathon
+# T2T — Teaching to Teach
 
-Skeleton di partenza per lo Student Tech Clash 2026 (Bicocca, 7 novembre).
-**Non è il prodotto**: è la macchina che sabato produce il prodotto in poche ore.
+L'agente che insegna a insegnare a chi sa la materia ma non ha mai imparato a spiegarla:
+studenti universitari che danno ripetizioni, allenatori, istruttori di circolo.
 
-## Cosa fa, oggi
+**Il meccanismo, in una riga:** l'agente non scrive la lezione finché l'istruttore non ha
+scommesso dove i suoi studenti si bloccheranno. Quando la lezione c'è, ogni blocco porta con
+sé il principio didattico che lo giustifica. Dopo, la sua previsione viene misurata contro
+la realtà.
 
-Una pagina, una funzione server, un modello:
+Demo: uno studente che insegna **Statistica** a tre matricole.
+Online: <https://studentclash-2026.vercel.app>
 
-1. incolli (o carichi) il materiale di un corso
-2. premi un'azione: *Genera domande* oppure *Valuta un elaborato*
-3. il modello legge il materiale e risponde seguendo il prompt di `app/config.js`
+## Il percorso (tre schermate)
+
+1. **Materiale** — il programma del corso, incollato o caricato. I contenuti della lezione
+   vengono solo da lì: se un argomento manca, l'agente lo segnala invece di inventarlo.
+2. **La scommessa** — un profilo per studente e un campo: «dove si bloccherà?». Il pulsante
+   resta disabilitato finché le previsioni non ci sono, e **la rotta server rifiuta comunque**
+   la richiesta senza di esse: il modello non viene nemmeno chiamato.
+3. **Il piano e il debriefing** — quattro-sei blocchi da 60 minuti con *cosa fa l'istruttore*,
+   *cosa fanno gli studenti*, *quanti minuti* e *perché*, con il principio citato. Segnalazioni
+   di gergo non spiegato e passaggi che rischia di saltare. I blocchi si possono togliere:
+   il piano è dell'istruttore. Poi detta com'è andata e riceve il confronto previsione/esito,
+   i profili aggiornati con la motivazione, la mappa degli errori della classe e la lezione dopo.
 
 ## Comandi
 
 ```bash
-npm install          # solo la prima volta
-npm run dev          # apre http://localhost:3000
-MOCK=1 npm run dev    # stessa app, senza rete: risposte finte (demo di sicurezza)
-npm run build        # verifica che compili (falla sempre prima di un push)
+npm install
+npm run dev            # http://localhost:3000
+MOCK=1 npm run dev      # senza rete: risposte finte, stessa forma JSON
+npm run build            # deve passare prima di ogni push
 ```
 
-## Dove si tocca cosa
+## Architettura
 
-| File | A cosa serve | Quando lo cambi |
+| Pezzo | Dov'è | Cosa fa |
 |---|---|---|
-| `app/config.js` | nome, tagline, azioni, prompt | sabato mattina, quando arriva il caso studio |
-| `app/page.js` | la pagina | raramente |
-| `app/api/chat/route.js` | chiamata al modello + mock | raramente |
-| `app/globals.css` | stile | se avanza tempo |
-| `.env.local` | chiave API (non si committa) | una volta |
+| Interfaccia | `app/page.js` | le tre schermate, stato nella sessione del browser |
+| Orchestrazione | `app/api/chat/route.js` | valida, **applica il gate**, chiama il modello, interpreta il JSON |
+| Conoscenza | materiale incollato dall'utente | nessun RAG: un documento per volta, troncato a 12.000 caratteri |
+| Prompt | `app/config.js` | ruolo, regole, formato JSON; dominio e studenti di prova |
+| Guardrail | `app/api/chat/route.js` | `MIN_PREDICTION`: senza previsione nessuna lezione. `MIN_LOG`: senza racconto nessun debriefing |
+| Modello | Ollama Cloud, `deepseek-v4.1-flash` | endpoint OpenAI-compatibile, temperatura 0,3 |
 
-## Variabili d'ambiente
+Input: programma + profili + previsioni. Conoscenza: solo il testo fornito. Decisioni: quali
+blocchi, con quale principio, quali segnalazioni. Output: JSON strutturato, reso dall'interfaccia.
 
-Copia `.env.example` in `.env.local`:
+Due scelte che tengono il prodotto onesto:
 
-```
-LLM_BASE_URL=https://ollama.com/v1
-LLM_API_KEY=...            # la tua key Ollama Cloud
-LLM_MODEL=deepseek-v4.1-flash
-MOCK=0
-```
+- **Il conteggio delle previsioni azzeccate lo fa il codice**, non il modello: se il modello
+  scrive «2 su 3» ma i verdetti veri sono uno, vince il codice.
+- **Il modello non vede il futuro**: nel debriefing gli è vietato inventare reazioni. Se il
+  racconto è troppo vago scrive in `needs_more` la domanda che gli serve, invece di riempire.
 
-Su Vercel le stesse variabili vanno messe in *Settings → Environment Variables*.
+## Interazioni d'esempio
+
+`docs/ESEMPI.md` — tre interazioni registrate contro il server vero: il rifiuto (il confine),
+il piano con il perché, il debriefing con previsione contro realtà. Output non modificati.
+
+Misure sul deploy pubblico (`studentclash-2026.vercel.app`, 7/11/2026):
+
+- `GET /api/chat` → `{"mock":false,"hasKey":true}`, stylesheet servito (1 `<link rel="stylesheet">`)
+- piano su programma di Statistica → 18-22 s
+- piano su materiale **fuori dominio** (corso di scacchi) → 21,8 s, risposta sugli scacchi:
+  prova che segue l'input e non una risposta in scatola
+- debriefing → 13-16 s
+
+## Cosa non c'è (e va detto nel pitch)
+
+- Nessun login, nessun salvataggio tra sessioni: chi ricarica riparte da zero.
+- Un solo documento per volta, troncato a 12.000 caratteri.
+- La dettatura usa il riconoscimento vocale del browser: senza, si scrive.
+- Un solo verticale dimostrato (ripetizioni universitarie). Il dominio si cambia in `app/config.js`.
 
 ## Deploy
 
-Push su `main` → Vercel ricostruisce da solo. L'URL pubblico è quello che apre la giuria.
-
-## Dati di esempio
-
-`data/mock-education/` — tre testi brevi già pronti da incollare in demo, così nessuno
-perde i primi dieci minuti a inventare contenuti.
+Push su `master` → Vercel. Le variabili `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` stanno in
+*Settings → Environment Variables*; `MOCK` **non** va messa in produzione (l'esito si verifica
+con un `GET /api/chat`: `mock` deve essere `false`).
